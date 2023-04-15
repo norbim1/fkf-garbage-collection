@@ -8,11 +8,11 @@ import re
 import voluptuous as vol
 import aiohttp
 
-from homeassistant.components.sensor import PLATFORM_SCHEMA
-from homeassistant.const import ATTR_ATTRIBUTION, CONF_NAME
+from homeassistant.components.sensor import PLATFORM_SCHEMA, ENTITY_ID_FORMAT
+from homeassistant.const import ATTR_ATTRIBUTION, CONF_NAME, ATTR_ENTITY_ID
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity import Entity, async_generate_entity_id
 from homeassistant.helpers.discovery import async_load_platform
 
 from .calendar import EntitiesCalendarData
@@ -66,6 +66,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_GREEN, default=DEFAULT_CONF_GREEN): cv.boolean,
     vol.Optional(CONF_GREENCOLOR, default=DEFAULT_CONF_GREENCOLOR): cv.string,
     vol.Optional(CONF_CITY, default=DEFAULT_CONF_CITY): cv.string,
+    vol.Optional(ATTR_ENTITY_ID, default=''): cv.string,
 })
 
 MAR1 = 60
@@ -74,6 +75,7 @@ DEC3 = 337
 @asyncio.coroutine
 def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
     name = config.get(CONF_NAME)
+    entityid = config.get(ATTR_ENTITY_ID)
     zipcode = config.get(CONF_ZIPCODE)
     publicplace = config.get(CONF_PUBLICPLACE)
     housenr = config.get(CONF_HOUSENR)
@@ -85,7 +87,7 @@ def async_setup_platform(hass, config, async_add_devices, discovery_info=None):
     city = config.get(CONF_CITY)
 
     async_add_devices(
-        [FKFGarbageCollectionSensor(hass, name, zipcode, publicplace, housenr, offsetdays, calendar, calendar_lang, green, greencolor)],update_before_add=True)
+        [FKFGarbageCollectionSensor(hass, name, entityid, zipcode, publicplace, housenr, offsetdays, calendar, calendar_lang, green, greencolor)],update_before_add=True)
 
 def dconverter(argument):
     switcher = {
@@ -321,7 +323,7 @@ async def async_get_fkfdata(self):
 
 class FKFGarbageCollectionSensor(Entity):
 
-    def __init__(self, hass, name, zipcode, publicplace, housenr, offsetdays, calendar, calendar_lang, green, greencolor):
+    def __init__(self, hass, name, entityid, zipcode, publicplace, housenr, offsetdays, calendar, calendar_lang, green, greencolor):
         """Initialize the sensor."""
         self._hass = hass
         self._name = name
@@ -341,6 +343,10 @@ class FKFGarbageCollectionSensor(Entity):
         self._green = green
         self._greencolor = greencolor
         self._session = async_get_clientsession(self._hass)
+        if entityid == '':
+          self.entity_id = async_generate_entity_id(ENTITY_ID_FORMAT, name, None, hass)
+        else:
+          self.entity_id = async_generate_entity_id(ENTITY_ID_FORMAT, entityid, None, hass)
         self._attr = {}
 
     async def async_added_to_hass(self):
@@ -432,7 +438,11 @@ class FKFGarbageCollectionSensor(Entity):
     @property
     def state(self):
         return self._state
-
+        
+    @property
+    def unique_id(self) -> str:
+        return self.entity_id
+        
     @property
     def icon(self):
         if 'garbage' in self._fkfdata[0]:
